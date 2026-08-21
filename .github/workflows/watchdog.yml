@@ -1,0 +1,21 @@
+name: Telegram intake watchdog
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check stale intake
+        env:
+          TELEGRAM_INTAKE_BOT_TOKEN: ${{ secrets.TELEGRAM_INTAKE_BOT_TOKEN }}
+          OWNER_TELEGRAM_ID: ${{ secrets.OWNER_TELEGRAM_ID }}
+          STALE_HOURS: '6'
+        run: python intake/watchdog.py
