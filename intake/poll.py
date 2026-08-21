@@ -162,8 +162,9 @@ def main() -> int:
         return 1
     try:
         run(telegram, project, owner_id)
-    except Exception:
-        log("Poll failed; cursor was not advanced past the failed update.")
+    except Exception as exc:
+        # API-level failures carry provider error text, never message content.
+        log(f"Poll failed; cursor was not advanced past the failed update. Cause: {exc}")
         return 1
     return 0
 

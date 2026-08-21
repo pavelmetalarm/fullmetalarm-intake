@@ -11,6 +11,23 @@ class ProjectError(RuntimeError):
     pass
 
 
+def _error_summary(payload: object) -> str:
+    """GitHub's error type and message only, never our own request data."""
+    if not isinstance(payload, dict):
+        return "unreadable response"
+    errors = payload.get("errors")
+    if not isinstance(errors, list) or not errors:
+        return "no data returned"
+    parts = []
+    for error in errors[:3]:
+        if not isinstance(error, dict):
+            continue
+        kind = error.get("type") or "ERROR"
+        message = str(error.get("message", ""))[:200]
+        parts.append(f"{kind}: {message}")
+    return "; ".join(parts) or "unspecified error"
+
+
 class ProjectClient:
     def __init__(self, token: str, owner: str, number: int) -> None:
         self._token, self.owner, self.number = token, owner, number
@@ -25,10 +42,14 @@ class ProjectClient:
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
                 payload = json.loads(response.read().decode("utf-8"))
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError, json.JSONDecodeError) as exc:
+        except urllib.error.HTTPError as exc:
+            # GitHub's own status text names permission problems and never
+            # echoes our request body, so it is safe to surface.
+            raise ProjectError(f"GitHub GraphQL HTTP {exc.code} {exc.reason}") from exc
+        except (urllib.error.URLError, OSError, json.JSONDecodeError) as exc:
             raise ProjectError("GitHub GraphQL request failed") from exc
-        if not isinstance(payload, dict) or payload.get("errors") or not isinstance(payload.get("data"), dict):
-            raise ProjectError("GitHub GraphQL returned an error")
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict) or payload.get("errors"):
+            raise ProjectError(f"GitHub GraphQL returned an error: {_error_summary(payload)}")
         return payload["data"]
 
     def resolve_project(self) -> str:
